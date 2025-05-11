@@ -1,266 +1,256 @@
-import * as BABYLON from '@babylonjs/core';
-import * as GUI from "@babylonjs/gui";
+import { AbstractMesh, AnimationGroup, Vector3, Scene, Ray } from "@babylonjs/core";
+import { InputManager } from "../../utils/InputManager";
 import { AnimationManager } from "../../utils/AnimationManager";
-import { EnemyTest } from "./EnemyTest";
-
-
-enum HeroState {
-  IDLE = "idle",
-  RUNNING = "running",
-  JUMPING = "jumping",
-  ATTACKING = "attacking",
-  DEFENDING = "defending",
-}
+import { Character } from "../Character";
+import { HeroState } from "../../enum/HeroState";
+import { CameraController } from "./CameraController"; // Adjust path as needed
+import { MovementUtils } from "../../utils/MovementUtils"; // Adjust path as needed
 
 const HERO_CONFIG = {
-  MOVE_SPEED: 0.1,
-  JUMP_IMPULSE: 5,
-  ATTACK_COOLDOWN_MS: 1500,
-  PARTICLE_EMIT_RATE: 300,
+    MOVE_SPEED: 3,
+    RUN_SPEED: 6,
+    JUMP_FORCE: 10,
+    GRAVITY: -9.81,
+    TERMINAL_VELOCITY: -30,
+    GROUND_RAY_LENGTH: 1.1,
+    AIR_CONTROL: 0.5, // Contrôle en l'air (0 = aucun, 1 = plein)
+    ROTATION_SPEED: 10, // Vitesse de rotation du personnage
+    ACCELERATION: 15, // Vitesse d'accélération
+    DECELERATION: 20, // Vitesse de décélération
 };
 
-export class HeroController {
-  private enemy: EnemyTest;
-  private heroMesh: BABYLON.AbstractMesh | null = null;
-  private inputMap: Record<string, boolean> = {};
-  private keyPressed: Record<string, boolean> = {};
-  private animationManager: AnimationManager | null = null;
-  private currentState: HeroState = HeroState.IDLE;
-  private attackCooldown = false;
-  private isJumping = false;
-  private isActionLocked = false;
-  private particleSystem: BABYLON.ParticleSystem | null = null;
-  private scene: BABYLON.Scene;
-  private camera: BABYLON.FreeCamera | null = null;
+export class HeroController extends Character {
+    private inputManager: InputManager;
+    public  animationManager: AnimationManager;
+    private scene: Scene;
+    private cameraController: CameraController;
+    private currentState: HeroState = HeroState.IDLE;
+    private isOnGround: boolean = true;
+    private isJumping: boolean = false;
 
-  constructor(scene: BABYLON.Scene) {
-    this.scene = scene;
-    this.loadHero();
-    // TEMP ENEMY
-    this.enemy = new EnemyTest(scene, new BABYLON.Vector3(0, 1, 5));
+    private velocity: Vector3 = Vector3.Zero();
+    private moveSpeed: number = HERO_CONFIG.MOVE_SPEED;
+    private jumpForce: number = HERO_CONFIG.JUMP_FORCE;
+    private gravity: number = HERO_CONFIG.GRAVITY;
+    private terminalVelocity: number = HERO_CONFIG.TERMINAL_VELOCITY;
 
-  }
+    private targetVelocity: Vector3 = Vector3.Zero();
+    private currentVelocity: Vector3 = Vector3.Zero();
+    private isRunning: boolean = false;
+    private jumpStartTime: number = 0;
+    private canDoubleJump: boolean = false;
 
-  private async loadHero() {
-    try {
-      const result = await BABYLON.SceneLoader.ImportMeshAsync(
-        "",
-        "assets/models/hero/",
-        "boy_hero_knight.glb",
-        this.scene
-      );
-
-      this.heroMesh = result.meshes[0];
-      this.heroMesh.position = new BABYLON.Vector3(0, 2, 0);
-
-      this.heroMesh.physicsImpostor = new BABYLON.PhysicsImpostor(
-        this.heroMesh,
-        BABYLON.PhysicsImpostor.BoxImpostor,
-        { mass: 1, restitution: 0, friction: 0.5 },
-        this.scene
-      );
-
-      const ground = BABYLON.MeshBuilder.CreateBox("ground", { width: 50, height: 1, depth: 50 }, this.scene);
-      ground.position.y = -0.5;
-      ground.physicsImpostor = new BABYLON.PhysicsImpostor(
-        ground,
-        BABYLON.PhysicsImpostor.BoxImpostor,
-        { mass: 0, restitution: 0, friction: 0.5 },
-        this.scene
-      );
-
-      this.animationManager = new AnimationManager(result.animationGroups, this.scene);
-      this.transitionToState(HeroState.IDLE);
-      this.createAttackParticles();
-      this.setupCamera();
-      this.setupInput();
-      this.scene.onBeforeRenderObservable.add(() => this.update());
-    } catch (error) {
-      console.error("Failed to load hero mesh:", error);
+    constructor(name: string, mesh: AbstractMesh, animationGroups: AnimationGroup[], canvas: HTMLCanvasElement) {
+        super(name, mesh, HERO_CONFIG.MOVE_SPEED, HERO_CONFIG.RUN_SPEED, 0.1);
+        this.scene = mesh.getScene();
+        this.inputManager = InputManager.getInstance(this.scene);
+        this.animationManager = new AnimationManager(animationGroups, this.scene);
+        this.cameraController = new CameraController(this.scene, canvas, this.mesh.position);
     }
-  }
 
-  private setupCamera() {
-    this.camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(0, 5, -10), this.scene);
-    this.camera.attachControl(this.scene.getEngine().getRenderingCanvas(), true);
-    this.camera.lockedTarget = this.heroMesh;
-    this.scene.activeCamera = this.camera;
-  }
+    public update(deltaTime: number): void {
+        this.cameraController.update(deltaTime);
+        this.checkGroundStatus();
+        this.handleInput(deltaTime);
+        this.applyGravity(deltaTime);
+        this.applyMovement(deltaTime);
+        this.updateState();
+        this.updateAnimation();
+    }
 
-  private setupInput() {
-    this.scene.actionManager = new BABYLON.ActionManager(this.scene);
-
-    this.scene.actionManager.registerAction(
-      new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnKeyDownTrigger, (evt) => {
-        const rawKey = evt.sourceEvent.key;
-        let key = rawKey.toLowerCase().trim();
-        if (key === "arrowup") key = "w";
-        if (key === "arrowdown") key = "s";
-        if (key === "arrowleft") key = "a";
-        if (key === "arrowright") key = "d";
-        this.inputMap[key] = true;
-
-        if (!this.keyPressed[key] && !this.isActionLocked) {
-          this.keyPressed[key] = true;
-          if (this.currentState === HeroState.IDLE || this.currentState === HeroState.RUNNING) {
-            if (key === " " && !this.isJumping) {
-              const velocityY = this.heroMesh?.physicsImpostor?.getLinearVelocity()?.y ?? 0;
-              if (Math.abs(velocityY) < 2.0) {
-                this.isJumping = true;
-                this.isActionLocked = true;
-                this.transitionToState(HeroState.JUMPING);
-              }
-            } else if (key === "f" && !this.attackCooldown) {
-              this.isActionLocked = true;
-              this.transitionToState(HeroState.ATTACKING);
-            } else if (key === "g") {
-              this.isActionLocked = true;
-              this.transitionToState(HeroState.DEFENDING);
-            }
-          }
+    private checkGroundStatus(): void {
+        // Ne pas vérifier pendant le saut
+        if (this.isJumping && this.currentVelocity.y > 0) {
+            return;
         }
-      })
-    );
-
-    this.scene.actionManager.registerAction(
-      new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnKeyUpTrigger, (evt) => {
-        let key = evt.sourceEvent.key.toLowerCase().trim();
-        if (key === "arrowup") key = "w";
-        if (key === "arrowdown") key = "s";
-        if (key === "arrowleft") key = "a";
-        if (key === "arrowright") key = "d";
-        this.inputMap[key] = false;
-        this.keyPressed[key] = false;
-      })
-    );
-  }
-
-  private createAttackParticles() {
-    const particleSystem = new BABYLON.ParticleSystem("attackParticles", 200, this.scene);
-    particleSystem.particleTexture = new BABYLON.Texture("https://playground.babylonjs.com/textures/flare.png", this.scene);
-    particleSystem.emitter = this.heroMesh;
-    particleSystem.minEmitBox = new BABYLON.Vector3(0, 1, 0.5);
-    particleSystem.maxEmitBox = new BABYLON.Vector3(0, 1, 0.5);
-    particleSystem.color1 = new BABYLON.Color4(1, 0, 0, 1);
-    particleSystem.color2 = new BABYLON.Color4(1, 1, 0, 1);
-    particleSystem.colorDead = new BABYLON.Color4(0, 0, 0, 0);
-    particleSystem.minSize = 0.1;
-    particleSystem.maxSize = 0.5;
-    particleSystem.minLifeTime = 0.1;
-    particleSystem.maxLifeTime = 0.3;
-    particleSystem.emitRate = HERO_CONFIG.PARTICLE_EMIT_RATE;
-    particleSystem.blendMode = BABYLON.ParticleSystem.BLENDMODE_ONEONE;
-    particleSystem.gravity = new BABYLON.Vector3(0, -9.81, 0);
-    particleSystem.direction1 = new BABYLON.Vector3(-1, 0, 1);
-    particleSystem.direction2 = new BABYLON.Vector3(1, 0, -1);
-    particleSystem.minAngularSpeed = 0;
-    particleSystem.maxAngularSpeed = Math.PI;
-    particleSystem.minEmitPower = 1;
-    particleSystem.maxEmitPower = 3;
-    particleSystem.updateSpeed = 0.01;
-    this.particleSystem = particleSystem;
-  }
-
-  private update() {
-    if (!this.heroMesh || !this.animationManager || !this.heroMesh.physicsImpostor) return;
-
-    const moveDirection = new BABYLON.Vector3(0, 0, 0);
-    let moving = false;
-
-    if (!this.isActionLocked) {
-      if (this.inputMap["w"]) {
-        moveDirection.z += 1;
-        moving = true;
-      }
-      if (this.inputMap["s"]) {
-        moveDirection.z -= 1;
-        moving = true;
-      }
-      if (this.inputMap["a"]) {
-        moveDirection.x -= 1;
-        moving = true;
-      }
-      if (this.inputMap["d"]) {
-        moveDirection.x += 1;
-        moving = true;
-      }
-    }
-
-    if (moving) {
-      moveDirection.normalize().scaleInPlace(HERO_CONFIG.MOVE_SPEED);
-      this.heroMesh.moveWithCollisions(moveDirection);
-      this.heroMesh.rotation.y = Math.atan2(moveDirection.x, moveDirection.z);
-      if (this.currentState !== HeroState.JUMPING) {
-        this.transitionToState(HeroState.RUNNING);
-      }
-    } else if (!this.isActionLocked && this.currentState !== HeroState.JUMPING) {
-      this.transitionToState(HeroState.IDLE);
-    }
-
-    if (this.isJumping) {
-      const velocityY = this.heroMesh.physicsImpostor.getLinearVelocity()!.y;
-      if (Math.abs(velocityY) > 2.0) {
-        this.animationManager.play("jumpairnormal", false);
-      } else if (Math.abs(velocityY) <= 2.0 && this.currentState === HeroState.JUMPING) {
-        this.isJumping = false;
-        this.isActionLocked = false;
-        this.animationManager.play("jumpendnormal", false, () => {
-          this.transitionToState(HeroState.IDLE);
-        });
-      }
-    }
-  }
-
-  private transitionToState(newState: HeroState) {
-    if (this.currentState === newState || !this.animationManager) return;
-
-    this.currentState = newState;
-    switch (newState) {
-      case HeroState.IDLE:
-        this.isActionLocked = false;
-        this.isJumping = false;
-        this.animationManager.play("idlenormal");
-        break;
-      case HeroState.RUNNING:
-        if (this.inputMap["w"]) this.animationManager.play("runfowardbattle");
-        else if (this.inputMap["s"]) this.animationManager.play("movebackwardbattle");
-        else if (this.inputMap["a"]) this.animationManager.play("moveleftbattle");
-        else if (this.inputMap["d"]) this.animationManager.play("moverightbattle");
-        break;
-      case HeroState.JUMPING:
-        const jumpAnim = this.animationManager.getAvailableAnimations().includes("jumpstartnormal")
-          ? "jumpstartnormal"
-          : "jumpfullnormal";
-        this.animationManager.play(jumpAnim, false, () => {
-          if (this.isJumping) {
-            this.animationManager.play("jumpairnormal", false);
-          }
-        });
-        this.heroMesh!.physicsImpostor!.applyImpulse(
-          new BABYLON.Vector3(0, HERO_CONFIG.JUMP_IMPULSE, 0),
-          this.heroMesh!.getAbsolutePosition()
+    
+        const ray = new Ray(
+            this.mesh.position.add(new Vector3(0, 0.5, 0)), // Commencer plus haut
+            new Vector3(0, -1, 0),
+            HERO_CONFIG.GROUND_RAY_LENGTH + 0.5 // Rayon plus long
         );
-        break;
-      case HeroState.ATTACKING:
-        this.attackCooldown = true;
-        const attacks = ["attack 1", "attack 2", "attack 3", "attack 4"];
-        const randomAttack = attacks[Math.floor(Math.random() * attacks.length)];
-        this.animationManager.play(randomAttack, false, () => {
-          this.isActionLocked = false;
-          this.transitionToState(HeroState.IDLE);
-        });
-        this.particleSystem?.start();
-        setTimeout(() => {
-          this.particleSystem?.stop();
-          this.attackCooldown = false;
-        }, HERO_CONFIG.ATTACK_COOLDOWN_MS);
-        break;
-      case HeroState.DEFENDING:
-        this.animationManager.play("defend", false, () => {
-          this.isActionLocked = false;
-          this.transitionToState(HeroState.IDLE);
-        });
-        break;
+        
+        const hit = this.scene.pickWithRay(ray, (mesh) => mesh.name === "ground");
+    
+        if (hit?.hit && hit.distance <= HERO_CONFIG.GROUND_RAY_LENGTH) {
+            if (!this.isOnGround) {
+                this.handleLanding(hit.pickedPoint!.y);
+            }
+        } else {
+            this.isOnGround = false;
+        }
     }
-  }
+
+    private handleInput(deltaTime: number): void {
+        // Gestion de la course
+        this.isRunning = this.inputManager.isRunning();
+
+        // Calcul de la direction de mouvement basée sur l'input et la caméra
+        const movement = this.inputManager.getMovementDirection();
+        const camera = this.cameraController.getCamera();
+        
+        // Calcul des directions forward/right en fonction de la caméra
+        const forward = camera.getForwardRay().direction.clone();
+        forward.y = 0;
+        forward.normalize();
+        
+        const right = Vector3.Cross(Vector3.Up(), forward).normalize();
+        
+        // Calcul de la direction cible
+        const targetDirection = forward.scale(movement.z).add(right.scale(movement.x));
+        if (targetDirection.lengthSquared() > 0) {
+            targetDirection.normalize();
+        }
+
+        // Calcul de la vitesse cible
+        const targetSpeed = this.isRunning ? this.runSpeed : this.moveSpeed;
+        this.targetVelocity.x = targetDirection.x * targetSpeed;
+        this.targetVelocity.z = targetDirection.z * targetSpeed;
+
+        // Interpolation vers la vitesse cible
+        const acceleration = this.isOnGround ? HERO_CONFIG.ACCELERATION : HERO_CONFIG.ACCELERATION * HERO_CONFIG.AIR_CONTROL;
+        this.currentVelocity.x = this.lerp(this.currentVelocity.x, this.targetVelocity.x, acceleration * deltaTime);
+        this.currentVelocity.z = this.lerp(this.currentVelocity.z, this.targetVelocity.z, acceleration * deltaTime);
+
+        // Rotation du personnage vers la direction de mouvement
+        if (targetDirection.lengthSquared() > 0) {
+            // Calculer la position cible pour le regard
+            const lookAtTarget = this.mesh.position.add(targetDirection.scale(10));
+            
+            // Appliquer une rotation douce
+            MovementUtils.applyLookAtSmooth(
+                this.mesh, 
+                lookAtTarget, 
+                HERO_CONFIG.ROTATION_SPEED * deltaTime
+            );
+        }
+
+        // Gestion du saut
+        if (this.inputManager.isJumpPressed()) {
+            if (this.isOnGround) {
+                this.jump();
+            } else if (this.canDoubleJump) {
+                this.doubleJump();
+            }
+        }
+    }
+
+    private jump(): void {
+        // Forcer le décollage
+        this.mesh.position.y += 0.2; // Petit "boost" pour éviter les collisions
+        
+        // Réinitialiser complètement l'état de saut
+        this.isOnGround = false;
+        this.isJumping = true;
+        this.canDoubleJump = true; // Réactiver le double saut
+        
+        // Appliquer la force de saut
+        this.currentVelocity.y = HERO_CONFIG.JUMP_FORCE;
+        this.jumpStartTime = Date.now();
+        
+        // Gestion des animations
+        this.animationManager.play("JumpStartNormal", false, () => {
+            return;
+        });
+    }
+
+    private doubleJump(): void {
+        this.currentVelocity.y = HERO_CONFIG.JUMP_FORCE * 0.8;
+        this.canDoubleJump = false;
+        this.animationManager.play("JumpStartNormal", false, () => {
+            return;
+        } )
+        
+    }
+
+    private handleLanding(groundY: number): void {
+        this.isOnGround = true;
+        this.isJumping = false;
+        this.currentVelocity.y = 0;
+        this.mesh.position.y = groundY + 0.1;
+        
+        // Animation d'atterrissage
+        this.animationManager.play("JumpEndNormal", false, () => {
+            if (this.currentState === HeroState.IDLE) {
+                this.animationManager.play("idleBattle", true);
+            } else {
+                this.animationManager.play("movefowardnormal", true);
+            }
+        });
+    }
+
+    private applyGravity(deltaTime: number): void {
+        if (!this.isOnGround) {
+            // Appliquer la gravité seulement si on n'est pas au sol
+            this.currentVelocity.y += this.gravity * deltaTime;
+            
+            // Limiter la vitesse de chute
+            if (this.currentVelocity.y < this.terminalVelocity) {
+                this.currentVelocity.y = this.terminalVelocity;
+            }
+        } else if (!this.isJumping) {
+            // S'assurer qu'on reste bien collé au sol quand on ne saute pas
+            this.currentVelocity.y = 0;
+        }
+    }
+
+    private applyMovement(deltaTime: number): void {
+        const movement = this.currentVelocity.scale(deltaTime);
+        this.mesh.position.addInPlace(movement);
+    }
+
+    private updateState(): void {
+        // Seuil de vitesse pour considérer qu'on bouge
+        const MOVEMENT_THRESHOLD = 0.1;
+        const isMoving = this.currentVelocity.length() > MOVEMENT_THRESHOLD;
+    
+        if (!this.isOnGround) {
+            this.currentState = HeroState.JUMPING;
+        } else if (isMoving) {
+            this.currentState = this.isRunning ? HeroState.RUNNING : HeroState.WALKING;
+        } else {
+            this.currentState = HeroState.IDLE;
+        }
+    }
+
+    private updateAnimation(): void {
+        switch (this.currentState) {
+            case HeroState.IDLE:
+                this.animationManager.play("idleBattle", true);
+                break;
+            case HeroState.WALKING:
+                this.animationManager.play("movefowardnormal", true);
+                break;
+            case HeroState.RUNNING:
+                this.animationManager.play("runfowardbattle", true);
+                break;
+            case HeroState.JUMPING:
+                this.animationManager.play("JumpAirNormal", true);
+                break;
+        }
+    }
+
+    // Helper functions
+    private lerp(start: number, end: number, t: number): number {
+        return start * (1 - t) + end * t;
+    }
+
+    private lerpAngle(start: number, end: number, t: number): number {
+        const difference = Math.abs(end - start);
+        if (difference > Math.PI) {
+            if (end > start) {
+                start += 2 * Math.PI;
+            } else {
+                end += 2 * Math.PI;
+            }
+        }
+        const result = this.lerp(start, end, t);
+        return this.normalizeAngle(result);
+    }
+
+    private normalizeAngle(angle: number): number {
+        while (angle > Math.PI) angle -= 2 * Math.PI;
+        while (angle < -Math.PI) angle += 2 * Math.PI;
+        return angle;
+    }
 }

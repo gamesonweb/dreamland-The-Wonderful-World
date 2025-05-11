@@ -6,8 +6,8 @@ const appDirectory = fs.realpathSync(process.cwd());
 module.exports = {
   entry: path.resolve(appDirectory, "src/app.ts"),
   output: {
-    filename: "js/bundle.js",
-    path: path.resolve(appDirectory, "dist"),
+    filename: "bundle.js",
+    path: path.resolve(appDirectory, "dist/js"),
     clean: true,
     publicPath: "/",
   },

@@ -22,27 +22,38 @@ export class AnimationManager {
   play(name: string, loop: boolean = true, onEnd?: () => void) {
     const anim = this.animations[name.toLowerCase()];
     if (!anim) {
-      console.warn(`Animation "${name}" not found`);
-      return;
-    }
-    if (this.currentAnimation === anim) return;
-
-    if (this.currentAnimation) {
-      this.crossFade(this.currentAnimation, anim, 0.3);
-    } else {
-      anim.reset();
-      anim.loopAnimation = loop;
-      anim.play(true);
+        console.warn(`Animation "${name}" not found`);
+        return;
     }
 
+    // Si la même animation est déjà en cours, ne rien faire
+    if (this.currentAnimation === anim && anim.isPlaying) {
+        return;
+    }
+
+    // Arrêter l'animation précédente si elle existe
+    if (this.currentAnimation && this.currentAnimation !== anim) {
+        this.currentAnimation.stop();
+    }
+
+    // Configurer et jouer la nouvelle animation
+    anim.reset();
+    anim.loopAnimation = loop;
+    anim.play(loop);
+
+    // Gestion du callback de fin
     if (onEnd && !loop) {
-      const observer = anim.onAnimationGroupEndObservable.addOnce(() => {
-        onEnd();
-      });
-      // Clean up observer if animation is stopped prematurely
-      anim.onAnimationGroupPlayObservable.addOnce(() => {
-        anim.onAnimationGroupEndObservable.remove(observer);
-      });
+        const endObserver = anim.onAnimationGroupEndObservable.addOnce(() => {
+            onEnd();
+            if (this.currentAnimation === anim) {
+                this.currentAnimation = null;
+            }
+        });
+        
+        // Nettoyage si l'animation est interrompue
+        anim.onAnimationGroupPlayObservable.addOnce(() => {
+            anim.onAnimationGroupEndObservable.remove(endObserver);
+        });
     }
 
     this.currentAnimation = anim;
@@ -54,10 +65,10 @@ export class AnimationManager {
    * @param to Target animation
    * @param duration Fade duration in seconds
    */
-  crossFade(from: AnimationGroup, to: AnimationGroup, duration: number) {
+  crossFade(from: AnimationGroup, to: AnimationGroup, duration: number, loop) {
     to.reset();
-    to.loopAnimation = true;
-    to.play(true);
+    to.loopAnimation = loop;
+    to.play(loop);
 
     let progress = 0;
     const step = 1 / (duration * 60); // Approximate 60 FPS
