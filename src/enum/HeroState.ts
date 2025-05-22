@@ -7,5 +7,6 @@ export enum HeroState {
     DEFENDING ,
     DIZZY ,
     DYING ,
+    DEAD,
     GETHIT ,
 }

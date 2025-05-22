@@ -103,7 +103,7 @@ export class AssetsLoader {
 
 
     public loadHeroesAssets(): void {
-        const heroes = ["boy_hero_knight","boyHero"];
+        const heroes = ["boy_hero"];
     
         heroes.forEach((hero) => {
             const task = this.assetsManager.addMeshTask(
@@ -144,6 +144,8 @@ export class AssetsLoader {
                 // Remove Asset from 
                 container.removeAllFromScene();
                 this.heroContainers[hero] = container;
+                console.log("Hero loaded:", hero);
+                console.log(this.heroContainers[hero]);
             };
         });
     }

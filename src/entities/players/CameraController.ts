@@ -7,8 +7,8 @@ export class CameraController {
     private canvas: HTMLCanvasElement;
 
     // Camera parameters
-    private distance: number = 4; // Distance from character
-    private height: number = 1.5; // Height above character
+    private distance: number = 3; // Distance from character
+    private height: number = 2; // Height above character
     private yaw: number = 0; // Horizontal rotation (radians)
     private pitch: number = Math.PI / 6; // Vertical rotation (radians, ~30° upward)
     private smoothing: number = 0.1; // Smoothing factor (lower = smoother)
@@ -114,7 +114,7 @@ export class CameraController {
                 const deltaY = event.clientY - this.lastMouseY;
 
                 // Update yaw (horizontal) and pitch (vertical)
-                this.yaw -= deltaX * this.mouseSensitivity;
+                this.yaw += deltaX * this.mouseSensitivity;
                 this.pitch += deltaY * this.mouseSensitivity;
 
                 // Clamp pitch to prevent flipping

@@ -2,7 +2,8 @@ import { AbstractMesh } from "@babylonjs/core";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { RecastJSPlugin } from "@babylonjs/core/Navigation";
 import { Character } from "../Character";
-import { Enemy } from "./Enemy";
+import { HeroController} from "../players/HeroController";
+import { BasicAiEnemy } from "./BasicAiEnemy";
 import { Scene } from "@babylonjs/core/scene";
 import { AnimationGroup } from "@babylonjs/core";
 import { MovementUtils } from "../../utils/MovementUtils";
@@ -11,14 +12,14 @@ import { ParticleSystem } from "@babylonjs/core";
 import { Color3, Color4, MeshBuilder, GlowLayer, StandardMaterial, Texture } from "@babylonjs/core";
 
 
-export class BeholderMonster extends Enemy {
+export class BeholderMonster extends BasicAiEnemy {
     scene : Scene;
     constructor(
         name: string,
         mesh: AbstractMesh,
         animationGroups: AnimationGroup[],
         initialPosition: Vector3,
-        player: Character,
+        player: HeroController,
         navPlugin: RecastJSPlugin,
         patrolAreaRadius: number,
         patrolPoints: Vector3[],
@@ -29,9 +30,10 @@ export class BeholderMonster extends Enemy {
         this.scene = scene;
         this.maxHealth = 70; // Points de vie maximum
         this.currentHealth = this.maxHealth; // Points de vie actuel
+        this.attackDamage = 7;
     }
 
-    public attackPlayer(player: Character): void {
+    public attackPlayer(player: HeroController): void {
         // Rotate enemy toward player 
         MovementUtils.applyLookAtSmooth(this.mesh, player.mesh.position.clone() , 0.02);
 
@@ -115,8 +117,11 @@ export class BeholderMonster extends Enemy {
         // Détection de collision
         electricBall.onCollideObservable.add((collidedMesh) => {
             // Action spécifique lors de la collision
-            if(collidedMesh === this.player.mesh) {
+            if(collidedMesh === this.player.mesh && !collidedMesh.name.includes("Shield") && !collidedMesh.name.includes("Sword")  ) {
                 console.log("collision with player");
+                if(!this.player.isDefending) {
+                    this.player.takeDamage(this.attackDamage);
+                }
             }
             scene.unregisterBeforeRender(moveProjectile); // Important pour éviter les fuites mémoire
             electricBall.dispose(); // Supprimer la boule

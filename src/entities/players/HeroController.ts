@@ -5,11 +5,13 @@ import { Character } from "../Character";
 import { HeroState } from "../../enum/HeroState";
 import { CameraController } from "./CameraController"; // Adjust path as needed
 import { MovementUtils } from "../../utils/MovementUtils"; // Adjust path as needed
+import { BoundingBox } from "@babylonjs/core";
+
 
 const HERO_CONFIG = {
     MOVE_SPEED: 3,
     RUN_SPEED: 6,
-    JUMP_FORCE: 10,
+    JUMP_FORCE: 8,
     GRAVITY: -9.81,
     TERMINAL_VELOCITY: -30,
     GROUND_RAY_LENGTH: 1.1,
@@ -19,13 +21,13 @@ const HERO_CONFIG = {
     DECELERATION: 20, // Vitesse de décélération
 };
 
-export class HeroController extends Character {
+export abstract class HeroController extends Character {
     private inputManager: InputManager;
     public  animationManager: AnimationManager;
-    private scene: Scene;
+    public scene: Scene;
     private cameraController: CameraController;
-    private currentState: HeroState = HeroState.IDLE;
-    private isOnGround: boolean = true;
+    public currentState: HeroState = HeroState.IDLE;
+    protected isOnGround: boolean = true;
     private isJumping: boolean = false;
 
     private velocity: Vector3 = Vector3.Zero();
@@ -40,23 +42,39 @@ export class HeroController extends Character {
     private jumpStartTime: number = 0;
     private canDoubleJump: boolean = false;
 
+    public isAttacking: boolean = false;
+    public attackCoolDown: boolean = false;
+    public isDefending: boolean = false;
+    public isGettingHit: boolean = false;
+
+    // pour la gestion des collisions 
+    public bodyBoundingBox: BoundingBox;
+    private bodyMeshes: AbstractMesh[] = []; // Stocke les meshes du corps
+    
+
     constructor(name: string, mesh: AbstractMesh, animationGroups: AnimationGroup[], canvas: HTMLCanvasElement) {
         super(name, mesh, HERO_CONFIG.MOVE_SPEED, HERO_CONFIG.RUN_SPEED, 0.1);
         this.scene = mesh.getScene();
         this.inputManager = InputManager.getInstance(this.scene);
         this.animationManager = new AnimationManager(animationGroups, this.scene);
         this.cameraController = new CameraController(this.scene, canvas, this.mesh.position);
+
     }
 
     public update(deltaTime: number): void {
         this.cameraController.update(deltaTime);
+
         this.checkGroundStatus();
         this.handleInput(deltaTime);
         this.applyGravity(deltaTime);
         this.applyMovement(deltaTime);
         this.updateState();
         this.updateAnimation();
+
+        
     }
+
+    
 
     private checkGroundStatus(): void {
         // Ne pas vérifier pendant le saut
@@ -82,6 +100,14 @@ export class HeroController extends Character {
     }
 
     private handleInput(deltaTime: number): void {
+        // Bloquer l'entrée si le personnage est dans un état critique
+        if (this.currentState === HeroState.DIZZY || 
+            this.currentState === HeroState.DYING || 
+            this.currentState === HeroState.DEAD) {
+            this.targetVelocity.set(0, 0, 0); // Arrêter tout mouvement
+            return;
+        }
+
         // Gestion de la course
         this.isRunning = this.inputManager.isRunning();
 
@@ -123,6 +149,25 @@ export class HeroController extends Character {
                 lookAtTarget, 
                 HERO_CONFIG.ROTATION_SPEED * deltaTime
             );
+
+        
+        }
+
+        // Gestion des Attaques 
+        if (this.inputManager.isAttackSpecialPressed() && !this.isAttacking && !this.attackCoolDown) {
+            this.specialAttack();
+        }
+        else if (this.inputManager.isAttackNormalPressed() && !this.isAttacking && !this.attackCoolDown) {
+            console.log("Attack normal pressed");
+            this.attack();
+        }
+        else if (this.inputManager.isDefenseDown()){
+            console.log("Defense down");
+            this.defend();
+        }
+
+        if (!this.inputManager.isDefenseDown()) {
+            this.stopDefend();
         }
 
         // Gestion du saut
@@ -200,6 +245,15 @@ export class HeroController extends Character {
     }
 
     private updateState(): void {
+        // Si le personnage est dans un état critique, ne pas le changer
+        if (this.currentState === HeroState.DIZZY || 
+            this.currentState === HeroState.DYING || 
+            this.currentState === HeroState.DEAD  ||
+            this.currentState === HeroState.GETHIT) {
+            return;
+        }
+
+
         // Seuil de vitesse pour considérer qu'on bouge
         const MOVEMENT_THRESHOLD = 0.1;
         const isMoving = this.currentVelocity.length() > MOVEMENT_THRESHOLD;
@@ -214,6 +268,15 @@ export class HeroController extends Character {
     }
 
     private updateAnimation(): void {
+        if (this.isAttacking || this.isDefending) {
+            return;
+        }
+
+        // Ne pas interrompre les animations d'attaque, de dégâts ou de mort
+        if (this.currentState === HeroState.DYING || this.currentHealth == HeroState.GETHIT) {
+            return;
+        }
+
         switch (this.currentState) {
             case HeroState.IDLE:
                 this.animationManager.play("idleBattle", true);
@@ -227,30 +290,87 @@ export class HeroController extends Character {
             case HeroState.JUMPING:
                 this.animationManager.play("JumpAirNormal", true);
                 break;
+            case HeroState.DIZZY:
+                this.animationManager.play("Dizzy", true);
+                break;
+            case HeroState.DEAD:
+                this.animationManager.play("DieStay",true);
+            default:
+                break; 
         }
     }
+
+    // --- Gestions attaques et defense --- 
+
+    public abstract attack():void ;
+
+    public abstract specialAttack(): void; 
+
+    public defend(): void {
+        this.isDefending = true; 
+
+        if (this.isGettingHit) {
+            this.animationManager.play("DenfendHit", false);
+        }else {
+            this.animationManager.play("Defend", true);
+        }      
+    }
+
+    public stopDefend(): void {
+        this.isDefending = false;
+    }
+
+    // Gestions de getHit et die 
+
+    public takeDamage(amount: number): void {
+        this.isGettingHit = true;
+        this.currentHealth = Math.max(this.currentHealth - amount, 0);
+        
+        this.currentState = HeroState.GETHIT;
+        this.animationManager.play("GetHit", false, () => {
+            if (this.currentHealth <= 0) {
+                this.currentlife = Math.max(this.currentlife -1, 0); 
+                    
+                if (this.currentlife <= 0) {
+                    this.die();
+                } else {
+                    this.respawn();
+                } 
+            }
+
+            this.isGettingHit = false;
+            this.currentState = HeroState.IDLE;
+        })
+    }
+
+    public die(): void {
+        this.currentState = HeroState.DYING;
+        this.animationManager.play("die",false, () => {
+            this.currentState = HeroState.DEAD;
+        }); 
+    }
+
+    public respawn(): void {
+        this.currentHealth = this.maxHealth; 
+        this.currentMana = this.maxMana;
+        this.isAttacking = false; 
+        this.attackCoolDown = false; 
+        this.isDefending = false; 
+
+        this.currentState = HeroState.DIZZY;
+        setTimeout(() => {
+            this.currentState = HeroState.IDLE;
+        }, 5000)  
+        
+    }
+
+
+    
+
 
     // Helper functions
     private lerp(start: number, end: number, t: number): number {
         return start * (1 - t) + end * t;
     }
 
-    private lerpAngle(start: number, end: number, t: number): number {
-        const difference = Math.abs(end - start);
-        if (difference > Math.PI) {
-            if (end > start) {
-                start += 2 * Math.PI;
-            } else {
-                end += 2 * Math.PI;
-            }
-        }
-        const result = this.lerp(start, end, t);
-        return this.normalizeAngle(result);
-    }
-
-    private normalizeAngle(angle: number): number {
-        while (angle > Math.PI) angle -= 2 * Math.PI;
-        while (angle < -Math.PI) angle += 2 * Math.PI;
-        return angle;
-    }
 }

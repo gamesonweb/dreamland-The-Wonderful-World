@@ -52,17 +52,24 @@ export class InputManager {
         return this.isKeyPressed(" ");
     }
 
-    public getMovementVector(): { forward: number; right: number } {
-        let forward = 0;
-        let right = 0;
-
-        if (this.isKeyDown("w") || this.isKeyDown("arrowup")) forward += 1;
-        if (this.isKeyDown("s") || this.isKeyDown("arrowdown")) forward -= 1;
-        if (this.isKeyDown("a") || this.isKeyDown("arrowleft")) right -= 1;
-        if (this.isKeyDown("d") || this.isKeyDown("arrowright")) right += 1;
-
-        return { forward, right };
+    public isAttackNormalPressed(): boolean {
+        return this.isKeyPressed("g");
     }
+
+    public isAttackSpecialPressed(): boolean {
+        return this.isKeyPressed("f");
+    }
+
+    public isDefensePressed(): boolean {
+        return this.isKeyPressed("c"); 
+    }
+
+    public isDefenseDown(): boolean {
+        return this.isKeyDown("c");
+    }
+
+
+    
 
     public getMovementDirection(): { x: number; z: number } {
         let x = 0;

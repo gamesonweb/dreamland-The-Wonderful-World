@@ -2,19 +2,20 @@ import { AbstractMesh } from "@babylonjs/core";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { RecastJSPlugin } from "@babylonjs/core/Navigation";
 import { Character } from "../Character";
-import { Enemy } from "./Enemy";
+import { HeroController } from "../players/HeroController";
+import { BasicAiEnemy } from "./BasicAiEnemy";
 import { Scene } from "@babylonjs/core/scene";
 import { AnimationGroup } from "@babylonjs/core";
 import { MovementUtils } from "../../utils/MovementUtils";
 import { EnemyState } from "../../enum/EnemyState";
 
-export class ChestMonster extends Enemy {
+export class ChestMonster extends BasicAiEnemy {
     constructor(
         name: string,
         mesh: AbstractMesh,
         animationGroups: AnimationGroup[],
         initialPosition: Vector3,
-        player: Character,
+        player: HeroController,
         navPlugin: RecastJSPlugin,
         patrolAreaRadius: number,
         patrolPoints: Vector3[],
@@ -24,6 +25,7 @@ export class ChestMonster extends Enemy {
         super(name, mesh, animationGroups, initialPosition, player, navPlugin, patrolAreaRadius, patrolPoints, sightRange,scene);
         this.maxHealth = 50; // Points de vie maximum
         this.currentHealth = this.maxHealth; // Points de vie actuel
+        this.attackDamage = 3;
     }
 
     public attackPlayer(player: Character): void {

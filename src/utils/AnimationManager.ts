@@ -18,8 +18,9 @@ export class AnimationManager {
    * @param name Animation name
    * @param loop Whether to loop the animation
    * @param onEnd Callback to execute when animation ends
+   * @param blendDuration Duration of blend between animations (in seconds)
    */
-  play(name: string, loop: boolean = true, onEnd?: () => void) {
+  play(name: string, loop: boolean = true, onEnd?: () => void, blendDuration: number = 0.2) {
     const anim = this.animations[name.toLowerCase()];
     if (!anim) {
         console.warn(`Animation "${name}" not found`);
@@ -31,16 +32,23 @@ export class AnimationManager {
         return;
     }
 
-    // Arrêter l'animation précédente si elle existe
-    if (this.currentAnimation && this.currentAnimation !== anim) {
-        this.currentAnimation.stop();
+    // Si une animation est en cours, faire un crossfade
+    if (this.currentAnimation && this.currentAnimation !== anim && blendDuration > 0) {
+        this.crossFade(this.currentAnimation, anim, blendDuration, loop);
+    } else { // Sinon jouer normalement
+
+      // Arrêter l'animation précédente si elle existe
+      if (this.currentAnimation && this.currentAnimation !== anim) {
+          this.currentAnimation.stop();
+      }
+
+      // Configurer et jouer la nouvelle animation
+      anim.reset();
+      anim.loopAnimation = loop;
+      anim.play(loop);
     }
 
-    // Configurer et jouer la nouvelle animation
-    anim.reset();
-    anim.loopAnimation = loop;
-    anim.play(loop);
-
+    
     // Gestion du callback de fin
     if (onEnd && !loop) {
         const endObserver = anim.onAnimationGroupEndObservable.addOnce(() => {
@@ -66,6 +74,8 @@ export class AnimationManager {
    * @param duration Fade duration in seconds
    */
   crossFade(from: AnimationGroup, to: AnimationGroup, duration: number, loop) {
+    from.setWeightForAllAnimatables(1);
+    to.setWeightForAllAnimatables(0);
     to.reset();
     to.loopAnimation = loop;
     to.play(loop);

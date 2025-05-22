@@ -10,6 +10,8 @@ export abstract class Character {
     public maxLife: number; // Points de vie maximum
     public currentHealth: number; // Points de vie actuel
     public maxHealth: number; // Points de vie maximum
+    public currentMana: number = 50;
+    public maxMana: number = 50;
 
     public speed: number; // Vitesse de déplacement
     public runSpeed: number; // Vitesse de course
