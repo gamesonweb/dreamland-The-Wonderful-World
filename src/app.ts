@@ -2,35 +2,30 @@ import { AnimationManager } from './utils/AnimationManager';
 import "@babylonjs/core/Debug/debugLayer";
 import "@babylonjs/inspector";
 import "@babylonjs/loaders/glTF";
-import { Engine, Scene, ArcRotateCamera, Vector3, HemisphericLight, Mesh, MeshBuilder , Color3, GlowLayer, Texture, Color4 } from "@babylonjs/core";
+import { Engine, Scene, FreeCamera, Vector3, HemisphericLight, MeshBuilder, Color3, StandardMaterial } from "@babylonjs/core";
 import Recast from "recast-detour";
 import { RecastJSPlugin } from "@babylonjs/core/Navigation";
-import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { AssetsLoader } from "./utils/AssetsLoader";
-import { ChestMonster } from "./entities/enemies/ChestMonster";
-import { Player } from "./entities/Player";
 import { BeholderMonster } from "./entities/enemies/BeholderMonster";
-import { ParticleSystem } from "@babylonjs/core/Particles/particleSystem";
 import { Knight } from "./entities/players/Knight";
-import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera";
-import { AnimationGroup } from "@babylonjs/core/Animations/animationGroup";
 import { CollisionsManager } from './game/CollisionsManager';
-
+import { GameUI } from "./ui/GameUI";
 
 class App {
+    private ui: GameUI | null = null;
+    private engine: Engine | null = null;
+    private scene: Scene | null = null;
+
     constructor() {
-        // create the canvas html element and attach it to the webpage
         const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
         if (!canvas) {
             throw new Error("Canvas not found");
         }
 
-        // initialize babylon scene and engine
-        var engine = new Engine(canvas, true);
-        var scene = new Scene(engine);
+        this.engine = new Engine(canvas, true);
+        this.scene = new Scene(this.engine);
 
-        // Debug layer
-        scene.debugLayer.show({
+        this.scene.debugLayer.show({
             embedMode: true,
             handleResize: true,
             overlay: true,
@@ -38,48 +33,31 @@ class App {
             showInspector: true,
         });
 
-        
-
-        // Assets loader
-        const assetsManager = new AssetsLoader(scene);
+        const assetsManager = new AssetsLoader(this.scene);
         assetsManager.loadAllAssets(async () => {
-
-            // Creation de la scene
-            // Remplacez la création de la caméra ArcRotateCamera par :
-            var camera = new FreeCamera("camera", new Vector3(0, 2, -5), scene);
+            var camera = new FreeCamera("camera", new Vector3(0, 2, -5), this.scene);
             camera.attachControl(canvas, true);
             camera.minZ = 0.1;
             camera.speed = 0;
             camera.attachControl(canvas, true);
-            var light1: HemisphericLight = new HemisphericLight("light1", new Vector3(1, 1, 0), scene);
+            var light1 = new HemisphericLight("light1", new Vector3(1, 1, 0), this.scene);
 
-
-            // creation du sol 
-            const ground = MeshBuilder.CreateGround("ground", { width: 20, height: 20 }, scene);
-            const groundMaterial = new StandardMaterial("groundMaterial", scene);
+            const ground = MeshBuilder.CreateGround("ground", { width: 20, height: 20 }, this.scene);
+            const groundMaterial = new StandardMaterial("groundMaterial", this.scene);
             groundMaterial.diffuseColor = new Color3(0.5, 0.5, 0.5);
             ground.material = groundMaterial;
-            ground.checkCollisions = true; // Activer les collisions pour le sol
+            ground.checkCollisions = true;
 
-
-            // Création du héros
             const heroAsset = assetsManager.getHeroClone("boy_hero");
             const heroMesh = heroAsset.mesh;
-            heroMesh.position.y = 0.5; // Position initiale légèrement au-dessus du sol
+            heroMesh.position.y = 0.5;
             heroMesh.checkCollisions = true;
-
             const heroAnimationGroups = heroAsset.animationGroups;
             const knight = new Knight(heroMesh, heroAnimationGroups, canvas);
+            console.log(`Knight Initial Health: ${knight.currentHealth}/${knight.maxHealth}`); // Debug log
 
-
-
-
-            // Creation d'un enemie
-            const recast = await  Recast(); // Recast est une promesse, donc on attend qu'elle soit résolue avant de continuer
-
-            // utilisation de navMesh pour la navigation
+            const recast = await Recast();
             const navPlugin = new RecastJSPlugin(recast);
-
             const navParams = {
                 cs: 0.2,
                 ch: 0.2,
@@ -95,48 +73,47 @@ class App {
                 detailSampleDist: 6,
                 detailSampleMaxError: 1,
             };
+            navPlugin.createNavMesh([ground], navParams);
 
-            // creation de la zone "walkable" ici la zone "walkable" est le sol
-            navPlugin.createNavMesh([ground], navParams, );
-
-            // DEBUG de nav mesh
-            /* const debugMesh = navPlugin.createDebugNavMesh(scene);
-            debugMesh.material = new StandardMaterial("debugMat", scene);
-            debugMesh.material.alpha = 0.2; */
-
-            
-            // Creation du monstre 
             const chestMonsterAsset = assetsManager.getEnemyClone("beholder_monster");
             const chestMonsterMesh = chestMonsterAsset.mesh;
             const chestMonsterAnimationGroups = chestMonsterAsset.animationGroups;
-            const chestMonster = new BeholderMonster("chestMonster", chestMonsterMesh,chestMonsterAnimationGroups, new Vector3(0, 0, 0), knight, navPlugin, 8, [new Vector3(5,0,0),new Vector3(0,0,5), new Vector3(-5,0,0), new Vector3(0,0,-5) ], 10, scene);
-            chestMonster.mesh.position = new Vector3(0, 0.1, 0); // Positionner le monstre dans la scène
-            chestMonster.mesh.rotation.y = Math.PI; // rotation de 180° autour de Y a cause de blender 
+            const chestMonster = new BeholderMonster("chestMonster", chestMonsterMesh, chestMonsterAnimationGroups, new Vector3(0, 0, 0), knight, navPlugin, 8, [new Vector3(5, 0, 0), new Vector3(0, 0, 5), new Vector3(-5, 0, 0), new Vector3(0, 0, -5)], 10, this.scene);
+            chestMonster.mesh.position = new Vector3(0, 0.1, 0);
+            chestMonster.mesh.rotation.y = Math.PI;
+            console.log(`Beholder Initial Health: ${chestMonster.currentHealth}/${chestMonster.maxHealth}`); // Debug log
 
-            // Collision Manager
-            const collisionManager = new CollisionsManager(knight, [chestMonster]); 
+            this.ui = new GameUI(this.scene);
+            const collisionManager = new CollisionsManager(knight, [chestMonster]);
             collisionManager.update(knight);
-;
-            // run the main render loop
-            engine.runRenderLoop(() => {
-                scene.render();
-                knight.update(engine.getDeltaTime()/1000); // Mettre à jour le héros à chaque frame
-                chestMonster.update(engine.getDeltaTime()/1000);
+
+            this.engine.runRenderLoop(() => {
+                this.scene!.render();
+                const dt = this.engine!.getDeltaTime() / 1000;
+                knight.update(dt);
+                chestMonster.update(dt);
+                this.ui!.updatePlayerHealth(knight.currentHealth, knight.maxHealth);
+                //this.ui!.setPlayerState(knight.isGettingHit ? "Getting Hit" : knight.isDefending ? "Defending" : knight.isAttacking ? "Attacking" : "Idle");
+                this.ui!.updateEnemyHealth(chestMonster.currentHealth, chestMonster.maxHealth);
+                //this.ui!.setEnemyState(chestMonster.state?.toString() || "Idle");
             });
+        });
+    }
 
-            
-        }); 
-    }  
-    
-    
-   
-
-    
-
-    
-
-    
+    public dispose(): void {
+        if (this.ui) {
+            this.ui.dispose();
+            this.ui = null;
+        }
+        if (this.scene) {
+            this.scene.dispose();
+            this.scene = null;
+        }
+        if (this.engine) {
+            this.engine.dispose();
+            this.engine = null;
+        }
+    }
 }
-
 
 new App();
