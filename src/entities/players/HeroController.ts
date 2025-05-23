@@ -7,7 +7,6 @@ import { CameraController } from "./CameraController"; // Adjust path as needed
 import { MovementUtils } from "../../utils/MovementUtils"; // Adjust path as needed
 import { BoundingBox } from "@babylonjs/core";
 
-
 const HERO_CONFIG = {
     MOVE_SPEED: 3,
     RUN_SPEED: 6,
@@ -23,7 +22,7 @@ const HERO_CONFIG = {
 
 export abstract class HeroController extends Character {
     private inputManager: InputManager;
-    public  animationManager: AnimationManager;
+    public animationManager: AnimationManager;
     public scene: Scene;
     private cameraController: CameraController;
     public currentState: HeroState = HeroState.IDLE;
@@ -50,7 +49,17 @@ export abstract class HeroController extends Character {
     // pour la gestion des collisions 
     public bodyBoundingBox: BoundingBox;
     private bodyMeshes: AbstractMesh[] = []; // Stocke les meshes du corps
-    
+
+    // Power properties
+    public maxPower: number = 100; // Maximum power value
+    public currentPower: number = 100; // Start with full power
+    private powerRegenRate: number = 10; // Power regen per second
+    public powerDrainPerAttack: number = 20; // Power drained per special attack
+
+     // Mana properties
+    public maxMana: number = 100;
+    public currentMana: number = 100;
+    private manaRegenRate: number = 5; // Mana regen per second
 
     constructor(name: string, mesh: AbstractMesh, animationGroups: AnimationGroup[], canvas: HTMLCanvasElement) {
         super(name, mesh, HERO_CONFIG.MOVE_SPEED, HERO_CONFIG.RUN_SPEED, 0.1);
@@ -59,6 +68,11 @@ export abstract class HeroController extends Character {
         this.animationManager = new AnimationManager(animationGroups, this.scene);
         this.cameraController = new CameraController(this.scene, canvas, this.mesh.position);
 
+        // Initialize health values
+        this.maxHealth = 100; // Set a default max health
+        this.currentHealth = this.maxHealth; // Start with full health
+        this.currentPower = this.maxPower;
+        this.currentMana = this.maxMana;
     }
 
     public update(deltaTime: number): void {
@@ -70,11 +84,21 @@ export abstract class HeroController extends Character {
         this.applyMovement(deltaTime);
         this.updateState();
         this.updateAnimation();
-
-        
+        this.regeneratePower(deltaTime); // Regenerate power over time
+        this.regenerateMana(deltaTime);
     }
 
-    
+    private regeneratePower(deltaTime: number): void {
+        if (this.currentPower < this.maxPower) {
+            this.currentPower = Math.min(this.currentPower + this.powerRegenRate * deltaTime, this.maxPower);
+        }
+    }
+
+    private regenerateMana(deltaTime: number): void {
+        if (this.currentMana < this.maxMana) {
+            this.currentMana = Math.min(this.currentMana + this.manaRegenRate * deltaTime, this.maxMana);
+        }
+    }
 
     private checkGroundStatus(): void {
         // Ne pas vérifier pendant le saut
@@ -149,8 +173,6 @@ export abstract class HeroController extends Character {
                 lookAtTarget, 
                 HERO_CONFIG.ROTATION_SPEED * deltaTime
             );
-
-        
         }
 
         // Gestion des Attaques 
@@ -161,7 +183,7 @@ export abstract class HeroController extends Character {
             console.log("Attack normal pressed");
             this.attack();
         }
-        else if (this.inputManager.isDefenseDown()){
+        else if (this.inputManager.isDefenseDown()) {
             console.log("Defense down");
             this.defend();
         }
@@ -204,8 +226,7 @@ export abstract class HeroController extends Character {
         this.canDoubleJump = false;
         this.animationManager.play("JumpStartNormal", false, () => {
             return;
-        } )
-        
+        });
     }
 
     private handleLanding(groundY: number): void {
@@ -253,7 +274,6 @@ export abstract class HeroController extends Character {
             return;
         }
 
-
         // Seuil de vitesse pour considérer qu'on bouge
         const MOVEMENT_THRESHOLD = 0.1;
         const isMoving = this.currentVelocity.length() > MOVEMENT_THRESHOLD;
@@ -294,24 +314,22 @@ export abstract class HeroController extends Character {
                 this.animationManager.play("Dizzy", true);
                 break;
             case HeroState.DEAD:
-                this.animationManager.play("DieStay",true);
+                this.animationManager.play("DieStay", true);
+                break;
             default:
                 break; 
         }
     }
 
     // --- Gestions attaques et defense --- 
-
-    public abstract attack():void ;
-
+    public abstract attack(): void;
     public abstract specialAttack(): void; 
 
     public defend(): void {
         this.isDefending = true; 
-
         if (this.isGettingHit) {
             this.animationManager.play("DenfendHit", false);
-        }else {
+        } else {
             this.animationManager.play("Defend", true);
         }      
     }
@@ -321,7 +339,6 @@ export abstract class HeroController extends Character {
     }
 
     // Gestions de getHit et die 
-
     public takeDamage(amount: number): void {
         this.isGettingHit = true;
         this.currentHealth = Math.max(this.currentHealth - amount, 0);
@@ -329,23 +346,21 @@ export abstract class HeroController extends Character {
         this.currentState = HeroState.GETHIT;
         this.animationManager.play("GetHit", false, () => {
             if (this.currentHealth <= 0) {
-                this.currentlife = Math.max(this.currentlife -1, 0); 
-                    
+                this.currentlife = Math.max(this.currentlife - 1, 0); 
                 if (this.currentlife <= 0) {
                     this.die();
                 } else {
                     this.respawn();
                 } 
             }
-
             this.isGettingHit = false;
             this.currentState = HeroState.IDLE;
-        })
+        });
     }
 
     public die(): void {
         this.currentState = HeroState.DYING;
-        this.animationManager.play("die",false, () => {
+        this.animationManager.play("die", false, () => {
             this.currentState = HeroState.DEAD;
         }); 
     }
@@ -353,6 +368,7 @@ export abstract class HeroController extends Character {
     public respawn(): void {
         this.currentHealth = this.maxHealth; 
         this.currentMana = this.maxMana;
+        this.currentPower = this.maxPower;
         this.isAttacking = false; 
         this.attackCoolDown = false; 
         this.isDefending = false; 
@@ -360,17 +376,20 @@ export abstract class HeroController extends Character {
         this.currentState = HeroState.DIZZY;
         setTimeout(() => {
             this.currentState = HeroState.IDLE;
-        }, 5000)  
-        
+        }, 5000);
     }
-
-
-    
-
 
     // Helper functions
     private lerp(start: number, end: number, t: number): number {
         return start * (1 - t) + end * t;
     }
 
+    // Method to drain power (called by specialAttack)
+    protected drainPower(amount: number): boolean {
+        if (this.currentPower >= amount) {
+            this.currentPower -= amount;
+            return true;
+        }
+        return false;
+    }
 }

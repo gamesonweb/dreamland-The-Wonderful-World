@@ -6,8 +6,6 @@ import { StandardMaterial, Color3 , ShaderMaterial, DynamicTexture, GlowLayer} f
 import { HeroState } from "../../enum/HeroState";
 
 export class Knight extends HeroController {
-    
-    
     public currentAttackDamage = 0;
     
     public swordMesh: Mesh;
@@ -15,9 +13,6 @@ export class Knight extends HeroController {
 
     private isSwordOnFire: boolean = false;
     
-    
-    
-
 
     // --- Particles System --- 
     private coreFlames: GPUParticleSystem;
@@ -83,8 +78,9 @@ export class Knight extends HeroController {
 
     public specialAttack(): void {
         const manaCost = 10;
+        const powerCost = this.powerDrainPerAttack;
 
-        if (this.currentMana - manaCost < 0) {
+        if (this.currentMana - manaCost < 0 || !this.drainPower(powerCost)) {
             this.attack(); 
             return; 
         }

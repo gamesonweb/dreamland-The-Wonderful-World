@@ -15,14 +15,16 @@ class App {
     private ui: GameUI | null = null;
     private engine: Engine | null = null;
     private scene: Scene | null = null;
+    private camera: FreeCamera | null = null;
+    private canvas: HTMLCanvasElement;
 
     constructor() {
-        const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
-        if (!canvas) {
+        this.canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
+        if (!this.canvas) {
             throw new Error("Canvas not found");
         }
 
-        this.engine = new Engine(canvas, true);
+        this.engine = new Engine(this.canvas, true);
         this.scene = new Scene(this.engine);
 
         this.scene.debugLayer.show({
@@ -35,11 +37,10 @@ class App {
 
         const assetsManager = new AssetsLoader(this.scene);
         assetsManager.loadAllAssets(async () => {
-            var camera = new FreeCamera("camera", new Vector3(0, 2, -5), this.scene);
-            camera.attachControl(canvas, true);
-            camera.minZ = 0.1;
-            camera.speed = 0;
-            camera.attachControl(canvas, true);
+            this.camera = new FreeCamera("camera", new Vector3(0, 2, -5), this.scene);
+            this.camera.minZ = 0.1;
+            this.camera.speed = 0;
+            this.camera.attachControl(this.canvas, true); // Enable camera controls immediately
             var light1 = new HemisphericLight("light1", new Vector3(1, 1, 0), this.scene);
 
             const ground = MeshBuilder.CreateGround("ground", { width: 20, height: 20 }, this.scene);
@@ -53,8 +54,8 @@ class App {
             heroMesh.position.y = 0.5;
             heroMesh.checkCollisions = true;
             const heroAnimationGroups = heroAsset.animationGroups;
-            const knight = new Knight(heroMesh, heroAnimationGroups, canvas);
-            console.log(`Knight Initial Health: ${knight.currentHealth}/${knight.maxHealth}`); // Debug log
+            const knight = new Knight(heroMesh, heroAnimationGroups, this.canvas);
+            console.log(`Knight Initial Health: ${knight.currentHealth}/${knight.maxHealth}, Power: ${knight.currentPower}/${knight.maxPower}, Mana: ${knight.currentMana}/${knight.maxMana}`);
 
             const recast = await Recast();
             const navPlugin = new RecastJSPlugin(recast);
@@ -81,7 +82,7 @@ class App {
             const chestMonster = new BeholderMonster("chestMonster", chestMonsterMesh, chestMonsterAnimationGroups, new Vector3(0, 0, 0), knight, navPlugin, 8, [new Vector3(5, 0, 0), new Vector3(0, 0, 5), new Vector3(-5, 0, 0), new Vector3(0, 0, -5)], 10, this.scene);
             chestMonster.mesh.position = new Vector3(0, 0.1, 0);
             chestMonster.mesh.rotation.y = Math.PI;
-            console.log(`Beholder Initial Health: ${chestMonster.currentHealth}/${chestMonster.maxHealth}`); // Debug log
+            console.log(`Beholder Initial Health: ${chestMonster.currentHealth}/${chestMonster.maxHealth}`);
 
             this.ui = new GameUI(this.scene);
             const collisionManager = new CollisionsManager(knight, [chestMonster]);
@@ -92,10 +93,11 @@ class App {
                 const dt = this.engine!.getDeltaTime() / 1000;
                 knight.update(dt);
                 chestMonster.update(dt);
+                console.log(`Knight Health in Loop: ${knight.currentHealth}/${knight.maxHealth}, Power: ${knight.currentPower}/${knight.maxPower}, Mana: ${knight.currentMana}/${knight.maxMana}`);
                 this.ui!.updatePlayerHealth(knight.currentHealth, knight.maxHealth);
-                //this.ui!.setPlayerState(knight.isGettingHit ? "Getting Hit" : knight.isDefending ? "Defending" : knight.isAttacking ? "Attacking" : "Idle");
+                this.ui!.updatePlayerPower(knight.currentPower, knight.maxPower);
                 this.ui!.updateEnemyHealth(chestMonster.currentHealth, chestMonster.maxHealth);
-                //this.ui!.setEnemyState(chestMonster.state?.toString() || "Idle");
+                // this.ui!.updateEnemyPower(chestMonster.currentPower, chestMonster.maxPower); // Commented out as per user
             });
         });
     }
