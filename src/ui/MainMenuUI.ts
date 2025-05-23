@@ -1,53 +1,61 @@
-import { AdvancedDynamicTexture, Rectangle, TextBlock, Button, Control } from "@babylonjs/gui";
+import { AdvancedDynamicTexture, Button, Control, Rectangle, TextBlock } from "@babylonjs/gui";
 import { Scene } from "@babylonjs/core";
 
 export class MainMenuUI {
     private advancedTexture: AdvancedDynamicTexture;
-    private isGameStarted: boolean = false;
-    private onStartCallback: () => void;
+    private container: Rectangle;
+    public onStartGame: () => void = () => {};
+    public onHowToPlay: () => void = () => {};
 
     constructor(scene: Scene) {
         this.advancedTexture = AdvancedDynamicTexture.CreateFullscreenUI("MainMenuUI");
 
-        const background = new Rectangle("menuBackground");
-        background.width = "400px";
-        background.height = "300px";
-        background.background = "rgba(0, 0, 0, 0.8)";
-        background.thickness = 2;
-        background.color = "white";
-        background.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
-        background.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
-        this.advancedTexture.addControl(background);
+        this.container = new Rectangle();
+        this.container.width = "100%";
+        this.container.height = "100%";
+        this.container.background = "rgba(0, 0, 0, 0.7)";
+        this.container.thickness = 0;
+        this.container.zIndex = 100;
+        this.advancedTexture.addControl(this.container);
 
-        const title = new TextBlock("title", "Knight vs. Monsters");
-        title.color = "red";
-        title.fontSize = 36;
+        const title = new TextBlock();
+        title.text = "MY AWESOME GAME";
+        title.fontSize = 48;
+        title.color = "white";
+        title.top = "-150px";
+        title.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
         title.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
-        title.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
-        title.top = "-80px";
-        background.addControl(title);
+        this.container.addControl(title);
 
-        const startButton = Button.CreateSimpleButton("startButton", "Start Game");
+        const startButton = Button.CreateSimpleButton("start", "Start Game");
         startButton.width = "200px";
-        startButton.height = "50px";
+        startButton.height = "60px";
         startButton.color = "white";
-        startButton.background = "green";
-        startButton.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
-        startButton.top = "-10px";
+        startButton.cornerRadius = 10;
+        startButton.background = "#28a745";
+        startButton.top = "-40px";
+        startButton.fontSize = 24;
+        startButton.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
         startButton.onPointerClickObservable.add(() => {
-            this.isGameStarted = true;
-            this.advancedTexture.dispose();
-            if (this.onStartCallback) this.onStartCallback();
+            this.dispose();
+            this.onStartGame();
         });
-        background.addControl(startButton);
-    }
+        this.container.addControl(startButton);
 
-    public setOnStartCallback(callback: () => void): void {
-        this.onStartCallback = callback;
-    }
-
-    public isStarted(): boolean {
-        return this.isGameStarted;
+        const howToPlayButton = Button.CreateSimpleButton("how", "How to Play");
+        howToPlayButton.width = "200px";
+        howToPlayButton.height = "60px";
+        howToPlayButton.color = "white";
+        howToPlayButton.cornerRadius = 10;
+        howToPlayButton.background = "#007bff";
+        howToPlayButton.top = "40px";
+        howToPlayButton.fontSize = 24;
+        howToPlayButton.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+        howToPlayButton.onPointerClickObservable.add(() => {
+            alert("Use arrow keys to move.\nSpace to attack.");
+            this.onHowToPlay();
+        });
+        this.container.addControl(howToPlayButton);
     }
 
     public dispose(): void {
