@@ -104,5 +104,12 @@ export class Knight extends HeroController {
         }, 800);
     }
 
+    public enableControls(): void {
+    this.scene.onBeforeRenderObservable.add(() => {
+        const deltaTime = this.scene.getEngine().getDeltaTime() / 1000;
+        this.update(deltaTime);
+    });
+}
+
 
 }

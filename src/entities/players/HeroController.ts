@@ -21,7 +21,7 @@ const HERO_CONFIG = {
 };
 
 export abstract class HeroController extends Character {
-    private inputManager: InputManager;
+    public inputManager: InputManager;
     public animationManager: AnimationManager;
     public scene: Scene;
     private cameraController: CameraController;

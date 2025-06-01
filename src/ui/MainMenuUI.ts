@@ -25,32 +25,41 @@ export class MainMenuUI {
         title.top = "-150px";
         title.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
         title.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
+
+        const buttonStyle = {
+            width: "220px",
+            height: "60px",
+            color: "white",
+            cornerRadius: 12,
+            fontSize: 26,
+            thickness: 0,
+            paddingLeft: "10px",
+            paddingRight: "10px",
+            shadowOffsetX: 2,
+            shadowOffsetY: 2,
+            shadowBlur: 4,
+            shadowColor: "black",
+        };
         this.container.addControl(title);
 
-        const startButton = Button.CreateSimpleButton("start", "Start Game");
-        startButton.width = "200px";
-        startButton.height = "60px";
-        startButton.color = "white";
-        startButton.cornerRadius = 10;
-        startButton.background = "#28a745";
+        const startButton = Button.CreateSimpleButton("start", "▶ Start Game");
+        Object.assign(startButton, buttonStyle);
+        startButton.background = "linear-gradient(135deg, #28a745 0%, #218838 100%)";
         startButton.top = "-40px";
-        startButton.fontSize = 24;
-        startButton.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+        startButton.onPointerEnterObservable.add(() => startButton.background = "linear-gradient(135deg, #34d058 0%, #28a745 100%)");
+        startButton.onPointerOutObservable.add(() => startButton.background = "linear-gradient(135deg, #28a745 0%, #218838 100%)");
         startButton.onPointerClickObservable.add(() => {
             this.dispose();
             this.onStartGame();
         });
         this.container.addControl(startButton);
 
-        const howToPlayButton = Button.CreateSimpleButton("how", "How to Play");
-        howToPlayButton.width = "200px";
-        howToPlayButton.height = "60px";
-        howToPlayButton.color = "white";
-        howToPlayButton.cornerRadius = 10;
-        howToPlayButton.background = "#007bff";
+        const howToPlayButton = Button.CreateSimpleButton("how", "❓ How to Play");
+        Object.assign(howToPlayButton, buttonStyle);
+        howToPlayButton.background = "linear-gradient(135deg, #007bff 0%, #0056b3 100%)";
         howToPlayButton.top = "40px";
-        howToPlayButton.fontSize = 24;
-        howToPlayButton.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+        howToPlayButton.onPointerEnterObservable.add(() => howToPlayButton.background = "linear-gradient(135deg, #339af0 0%, #007bff 100%)");
+        howToPlayButton.onPointerOutObservable.add(() => howToPlayButton.background = "linear-gradient(135deg, #007bff 0%, #0056b3 100%)");
         howToPlayButton.onPointerClickObservable.add(() => {
             alert("Use arrow keys to move.\nSpace to attack.");
             this.onHowToPlay();
