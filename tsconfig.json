@@ -12,6 +12,6 @@
         "es6"
     ],
     "rootDir": "src",
-    "outDir": "dist",
+    "outDir": "docs",
   }
 }
