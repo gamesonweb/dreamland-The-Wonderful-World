@@ -104,12 +104,22 @@ export class Knight extends HeroController {
         }, 800);
     }
 
+    private controlsEnabled = true;
+
+    public disableControls(): void {
+        this.controlsEnabled = false;
+    }
+
     public enableControls(): void {
-    this.scene.onBeforeRenderObservable.add(() => {
-        const deltaTime = this.scene.getEngine().getDeltaTime() / 1000;
-        this.update(deltaTime);
-    });
-}
+        this.controlsEnabled = true;
+        this.scene.onBeforeRenderObservable.add(() => {
+            if (this.controlsEnabled) {
+                const deltaTime = this.scene.getEngine().getDeltaTime() / 1000;
+                this.update(deltaTime);
+            }
+        });
+    }
+
 
 
 }

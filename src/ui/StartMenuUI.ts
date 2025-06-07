@@ -24,26 +24,29 @@ export class StartMenuUI {
     private selectedButtonIndex: number = 0;
     private buttons: Button[] = [];
     private music: Sound;
+    private bgImage: Image;
+    private background: Rectangle;
+
 
     constructor(scene: Scene, startCallback: () => void, showHowTo: () => void, showSettings: () => void, showCredits: () => void, restartCallback: () => void) {
         this.ui = AdvancedDynamicTexture.CreateFullscreenUI("StartMenuUI", true, scene);
 
         // Background image
-        const bgImage = new Image("bg", "assets/textures/menuBackground.jpg");
-        bgImage.stretch = Image.STRETCH_UNIFORM;
-        bgImage.width = "100%";
-        bgImage.height = "100%";
-        bgImage.alpha = 0.4;
-        bgImage.zIndex = -2;
-        this.ui.addControl(bgImage);
+        this.bgImage = new Image("bg", "assets/textures/menuBackground.jpg");
+        this.bgImage.stretch = Image.STRETCH_UNIFORM;
+        this.bgImage.width = "100%";
+        this.bgImage.height = "100%";
+        this.bgImage.alpha = 0.4;
+        this.bgImage.zIndex = -2;
+        this.ui.addControl(this.bgImage);
 
-        const background = new Rectangle();
-        background.width = "100%";
-        background.height = "100%";
-        background.background = "#1a2a4488"; // Deep blue semi-transparent
-        background.thickness = 0;
-        background.zIndex = -1;
-        this.ui.addControl(background);
+        this.background = new Rectangle();
+        this.background.width = "100%";
+        this.background.height = "100%";
+        this.background.background = "#1a2a4488"; // Deep blue semi-transparent
+        this.background.thickness = 0;
+        this.background.zIndex = -1;
+        this.ui.addControl(this.background);
 
         this.panel = new StackPanel();
         this.panel.width = "80%";
@@ -82,7 +85,7 @@ export class StartMenuUI {
 
         // Buttons
         this.buttons.push(this.createButton("🛡️  Begin Adventure", () => {
-            this.dispose();
+            this.hide();
             const pipeline = scene.postProcessRenderPipelineManager.supportedPipelines[0] as DefaultRenderingPipeline;
             if (pipeline) {
                 pipeline.imageProcessingEnabled = true;
@@ -92,8 +95,8 @@ export class StartMenuUI {
             startCallback();
         }));
 
-        this.buttons.push(this.createModalButton("❓ How to Play", "Use WASD to move\nClick to attack\nShift to dash."));
-        this.buttons.push(this.createModalButton("🛠️ Options", "Settings are not available in this demo."));
+        //this.buttons.push(this.createModalButton("❓ How to Play", "Use WASD to move\nClick to attack\nShift to dash."));
+        //this.buttons.push(this.createModalButton("🛠️ Options", "Settings are not available in this demo."));
         //this.buttons.push(this.createModalButton("🎨 Credits", "Game by LG NB RM.\nAssets from XYZ sources."));
         this.buttons.push(this.createButton("🔁 Restart", restartCallback));
         this.buttons.push(this.createButton("🖥️ Toggle Fullscreen", () => {
@@ -140,15 +143,15 @@ export class StartMenuUI {
         this.music = new Sound("menuMusic", "assets/sounds/menu.mp3", scene, null, { loop: true, autoplay: true, volume: 0.4 });
 
         // Parallax effect for background
-        bgImage.left = 0;
-        bgImage.top = 0;
+        this.bgImage.left = 0;
+        this.bgImage.top = 0;
         scene.onPointerMove = (evt) => {
             const x = scene.getEngine().getRenderWidth();
             const y = scene.getEngine().getRenderHeight();
             const moveX = (evt.clientX / x - 0.5) * 20; // Max 20px movement
             const moveY = (evt.clientY / y - 0.5) * 20;
-            bgImage.left = `${moveX}px`;
-            bgImage.top = `${moveY}px`;
+            this.bgImage.left = `${moveX}px`;
+            this.bgImage.top = `${moveY}px`;
         };
     }
 
@@ -301,4 +304,39 @@ export class StartMenuUI {
             this.music.dispose();
         }
     }
+
+    public show(): void {
+        console.log("StartMenuUI.show() called");
+        this.panel.isVisible = true;
+        this.panel.alpha = 1;
+
+        this.bgImage.isVisible = true;
+        this.background.isVisible = true;
+
+        Animation.CreateAndStartAnimation("fadeIn", this.panel, "alpha", 60, 30, 0, 1, Animation.ANIMATIONLOOPMODE_CONSTANT);
+
+        if (this.music && !this.music.isPlaying) {
+            this.music.play();
+        }
+    }
+
+
+    public hide(): void {
+        console.log("StartMenuUI.hide() called");
+
+        this.panel.isVisible = false;
+        this.panel.alpha = 0;
+
+        this.bgImage.isVisible = false;
+        this.background.isVisible = false;
+
+        Animation.CreateAndStartAnimation("fadeOut", this.panel, "alpha", 60, 30, 1, 0, Animation.ANIMATIONLOOPMODE_CONSTANT);
+
+        if (this.music && this.music.isPlaying) {
+            this.music.pause();
+        }
+    }
+
+
+
 }

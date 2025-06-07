@@ -2,7 +2,8 @@ import {
     AdvancedDynamicTexture,
     Rectangle,
     Control,
-    Image
+    Image,
+    Button
 } from "@babylonjs/gui";
 import { Scene } from "@babylonjs/core";
 
@@ -13,16 +14,38 @@ export class GameUI {
     private playerPortrait: Image;
     private playerPowerBar: Rectangle;
 
-    constructor(scene: Scene) {
+    constructor(scene: Scene, showMenuCallback: () => void) {
         this.advancedTexture = AdvancedDynamicTexture.CreateFullscreenUI("GameUI");
 
         this.createHealthBar();
         this.createPortrait();
         this.createPowerBar();
+        this.createMenuButton(showMenuCallback);
 
         this.updatePlayerHealth(100, 100);
         this.updatePlayerPower(0, 100);
     }
+
+    private createMenuButton(showMenuCallback: () => void): void {
+        const button = Button.CreateSimpleButton("menuBtn", "≡");
+        button.width = "40px";
+        button.height = "40px";
+        button.fontSize = 28;
+        button.color = "white";
+        button.background = "#444";
+        button.cornerRadius = 8;
+        button.thickness = 1;
+        button.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+        button.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+        button.top = "20px";
+        button.left = "-20px";
+        button.onPointerClickObservable.add(() => {
+            showMenuCallback();
+        });
+        this.advancedTexture.addControl(button);
+
+    }
+
 
     private createHealthBar(): void {
         const container = new Rectangle("playerHealthContainer");
