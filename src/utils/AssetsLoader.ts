@@ -17,6 +17,7 @@ export class AssetsLoader {
     // Dictionnaires pour stocker les assets chargés
     private heroContainers: { [key: string]: AssetContainer } = {};
     private enemyContainers: { [key: string]: AssetContainer } = {};
+    private levelContainers: {[key: string]: AssetContainer} = {};
     private texturesAssets: { [key: string]: TextureAssetTask } = {};
 
 
@@ -31,6 +32,7 @@ export class AssetsLoader {
     public loadAllAssets(onFinish?: () => void): void {
         this.loadHeroesAssets();
         this.loadEnemiesAssets();
+        this.loadLevelAssets();
 
         // Callback quand tous les assets sont chargés
         this.assetsManager.onFinish = (tasks) => {
@@ -151,7 +153,53 @@ export class AssetsLoader {
     }
 
     
+    public loadLevelAssets(): void {
+        const level = ["ModelisationLevelPlatformer_ExportGodot2", "realFinalWorld"];  // rajouter les NOM du fichier de l'objet 
+    
+        level.forEach((object) => {
+            const task = this.assetsManager.addMeshTask(
+                `${object}_task`, "", "assets/environment/", `${object}.glb`
+            );
+            
+            task.onSuccess = (task) => {
+                const container = new AssetContainer(this.scene);
+                
+                // Add all transform nodes first
+                task.loadedTransformNodes?.forEach(transformNode => {
+                    container.transformNodes.push(transformNode);
+                });
+    
+                // Then add meshes
+                task.loadedMeshes.forEach(mesh => {
+                    container.meshes.push(mesh);
+                    
+                    // Ensure all parents are transform nodes in the container
+                    let parent = mesh.parent;
+                    while (parent) {
+                        if (parent instanceof TransformNode && 
+                            !container.transformNodes.includes(parent)) {
+                            container.transformNodes.push(parent);
+                        }
+                        parent = parent.parent;
+                    }
+                });
+    
+                // Add Animation
+                task.loadedAnimationGroups?.forEach(anim => 
+                    container.animationGroups.push(anim));
 
+                // Add skeleton
+                task.loadedSkeletons?.forEach(skeleton => 
+                    container.skeletons.push(skeleton));
+                
+                // Remove Asset from 
+                container.removeAllFromScene();
+                this.levelContainers[object] = container;
+                console.log("level object loaded:", object);
+                console.log(this.levelContainers[object]);
+            };
+        });
+    }
 
     
     
@@ -203,7 +251,28 @@ export class AssetsLoader {
         };
     }
 
-
+    public getLevelObjectClone(name: string): LoadedAsset | null {
+        const container = this.levelContainers[name];
+        if (!container) return null;
+    
+        const entries = container.instantiateModelsToScene(
+            (sourceName) => `${sourceName}`,
+            false
+        );
+    
+        // Find the main mesh (first root node that's a mesh)
+        const mainMesh = entries.rootNodes.find(node => node instanceof AbstractMesh) as AbstractMesh;
+        
+        if (!mainMesh) {
+            console.error("No mesh found in cloned assets");
+            return null;
+        }
+    
+        return {
+            mesh: mainMesh,
+            animationGroups: entries.animationGroups
+        };
+    }
 
     
 }
