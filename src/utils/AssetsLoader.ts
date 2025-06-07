@@ -154,7 +154,7 @@ export class AssetsLoader {
 
     
     public loadLevelAssets(): void {
-        const level = ["ModelisationLevelPlatformer_ExportGodot2", "realFinalWorld"];  // rajouter les NOM du fichier de l'objet 
+        const level = ["ModelisationLevelPlatformer_ExportGodot2"];  // rajouter les NOM du fichier de l'objet 
     
         level.forEach((object) => {
             const task = this.assetsManager.addMeshTask(
